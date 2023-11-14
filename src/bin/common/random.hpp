@@ -23,8 +23,8 @@ class random64 {
 public:
   using typ = std::mt19937_64::result_type;
 
-  random64()
-  : gen{static_cast<typ>(time_clock::now().time_since_epoch().count())}
+  random64(size_t seed = 0)
+  : gen{static_cast<typ>(time_clock::now().time_since_epoch().count() + seed)}
   , dst{}
   {}
 

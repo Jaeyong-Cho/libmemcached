@@ -59,13 +59,13 @@ struct keyval_st {
   size_t fixed_size;
   random64 rnd;
 
-  explicit keyval_st(size_t num_, size_t exec_num_, size_t fixed_size_)
+  explicit keyval_st(size_t num_, size_t exec_num_, size_t fixed_size_, size_t seed)
   : key{num_}
   , val{num_}
   , num{num_}
   , exec_num{exec_num_}
   , fixed_size(fixed_size_)
-  , rnd{}
+  , rnd{seed}
   {
     for (auto i = 0u; i < num; ++i) {
       gen(key.chr[i], key.len[i], val.chr[i], val.len[i]);
@@ -281,6 +281,7 @@ int main(int argc, char *argv[]) {
   auto load_count = DEFAULT_INITIAL_LOAD;
   auto test_count = DEFAULT_EXECUTE_NUMBER;
   auto fixed_size = 0ul;
+  auto seed = 0ul;
 
   for (const auto &def : opt.defaults) {
     opt.add(def);
@@ -314,9 +315,11 @@ int main(int argc, char *argv[]) {
       .apply = wrap_stoul(test_count);
   opt.add("initial-load", 'l', required_argument, "Number of keys to load before executing tests (default: 10000).")
       .apply = wrap_stoul(load_count);
-  opt.add("fixed-size", 'f', required_argument, "Fixed length of value  (default: random).")
+  opt.add("fixed-size", 'f', required_argument, "Fixed length of value (default: random).")
       .apply = wrap_stoul(fixed_size);
-  opt.add("distribution", 'D', required_argument, "Save response time of get test. Only working with test=get option  (default: stdout).");
+  opt.add("distribution", 'D', required_argument, "Save response time of get test. Only working with test=get option (default: stdout).");
+  opt.add("seed", 'S', required_argument, "Seed of random number generator for key/value data (default: random).")
+      .apply = wrap_stoul(seed);
 
   char set[] = "set";
   opt.set("test", true, set);
@@ -373,7 +376,7 @@ int main(int argc, char *argv[]) {
     std::cout << "- Generating random test data ...\n";
   }
   auto keyval_start = time_clock::now();
-  keyval_st kv{load_count, test_count, fixed_size};
+  keyval_st kv{load_count, test_count, fixed_size, seed};
   auto keyval_elapsed = time_clock::now() - keyval_start;
 
   if (!opt.isset("quiet")) {
