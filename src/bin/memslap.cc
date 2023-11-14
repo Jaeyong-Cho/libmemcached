@@ -55,13 +55,15 @@ struct keyval_st {
 
   size_t num;
   size_t exec_num;
+  size_t fixed_size;
   random64 rnd;
 
-  explicit keyval_st(size_t num_, size_t exec_num_)
+  explicit keyval_st(size_t num_, size_t exec_num_, size_t fixed_size_)
   : key{num_}
   , val{num_}
   , num{num_}
   , exec_num{exec_num_}
+  , fixed_size(fixed_size_)
   , rnd{}
   {
     for (auto i = 0u; i < num; ++i) {
@@ -84,7 +86,10 @@ private:
     key_chr[key_len] = 0;
   }
   void gen_val(const char *key_chr, const size_t key_len, char *&val_chr, size_t &val_len) {
-    val_len = rnd(50, 5000);
+    if (fixed_size == 0)
+      val_len = rnd(50, 5000);
+    else
+      val_len = fixed_size;
     val_chr = new char[val_len];
 
     for (auto len = 0u; len < val_len; len += key_len) {
@@ -236,6 +241,7 @@ int main(int argc, char *argv[]) {
   auto concurrency = DEFAULT_CONCURRENCY;
   auto load_count = DEFAULT_INITIAL_LOAD;
   auto test_count = DEFAULT_EXECUTE_NUMBER;
+  auto fixed_size = 0ul;
 
   for (const auto &def : opt.defaults) {
     opt.add(def);
@@ -269,6 +275,8 @@ int main(int argc, char *argv[]) {
       .apply = wrap_stoul(test_count);
   opt.add("initial-load", 'l', required_argument, "Number of keys to load before executing tests (default: 10000).")
       .apply = wrap_stoul(load_count);
+  opt.add("fixed-size", 'f', required_argument, "Fixed length of value  (default: random).")
+      .apply = wrap_stoul(fixed_size);
 
   char set[] = "set";
   opt.set("test", true, set);
@@ -325,7 +333,7 @@ int main(int argc, char *argv[]) {
     std::cout << "- Generating random test data ...\n";
   }
   auto keyval_start = time_clock::now();
-  keyval_st kv{load_count, test_count};
+  keyval_st kv{load_count, test_count, fixed_size};
   auto keyval_elapsed = time_clock::now() - keyval_start;
 
   if (!opt.isset("quiet")) {
