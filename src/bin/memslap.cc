@@ -54,12 +54,14 @@ struct keyval_st {
   data val;
 
   size_t num;
+  size_t exec_num;
   random64 rnd;
 
-  explicit keyval_st(size_t num_)
+  explicit keyval_st(size_t num_, size_t exec_num_)
   : key{num_}
   , val{num_}
   , num{num_}
+  , exec_num{exec_num_}
   , rnd{}
   {
     for (auto i = 0u; i < num; ++i) {
@@ -101,7 +103,7 @@ static size_t execute_get(const client_options &opt, memcached_st &memc, const k
   size_t retrieved = 0;
   random64 rnd{};
 
-  for (auto i = 0u; i < kv.num; ++i) {
+  for (auto i = 0u; i < kv.exec_num; ++i) {
     memcached_return_t rc;
     auto r = rnd(0, kv.num);
     free(memcached_get(&memc, kv.key.chr[r], kv.key.len[r], nullptr, nullptr, &rc));
@@ -265,8 +267,7 @@ int main(int argc, char *argv[]) {
       .apply = wrap_stoul(concurrency);
   opt.add("execute-number", 'e', required_argument, "Number of times to execute the tests (default: 10000).")
       .apply = wrap_stoul(test_count);
-  opt.add("initial-load", 'l', required_argument, "Number of keys to load before executing tests (default: 10000)."
-                                                  "\n\t\tDEPRECATED: --execute-number takes precedence.")
+  opt.add("initial-load", 'l', required_argument, "Number of keys to load before executing tests (default: 10000).")
       .apply = wrap_stoul(load_count);
 
   char set[] = "set";
@@ -284,6 +285,14 @@ int main(int argc, char *argv[]) {
   if (!opt.apply(&memc)) {
     memcached_free(&memc);
     exit(EXIT_FAILURE);
+  }
+
+  if (!strcmp("get", opt.argof("test"))) {
+    if (load_count < test_count)
+    {
+      std::cerr << "initial-load must larger than execute-num on get test\n";
+      exit(1);
+    }
   }
 
   auto total_start = time_clock::now();
@@ -316,12 +325,12 @@ int main(int argc, char *argv[]) {
     std::cout << "- Generating random test data ...\n";
   }
   auto keyval_start = time_clock::now();
-  keyval_st kv{test_count};
+  keyval_st kv{load_count, test_count};
   auto keyval_elapsed = time_clock::now() - keyval_start;
 
   if (!opt.isset("quiet")) {
     std::cout << "Time to generate   "
-              << align << test_count
+              << align << load_count
               << " test keys:             "
               << align << time_format(keyval_elapsed).count()
               << " seconds.\n";
