@@ -31,6 +31,7 @@
 #include <atomic>
 #include <thread>
 #include <iomanip>
+#include <sys/time.h>
 
 static std::atomic_bool wakeup;
 
@@ -107,17 +108,50 @@ private:
 static size_t execute_get(const client_options &opt, memcached_st &memc, const keyval_st &kv) {
   size_t retrieved = 0;
   random64 rnd{};
+  std::vector<uint64_t> get_time;
+  std::vector<uint64_t> res_time;
 
   for (auto i = 0u; i < kv.exec_num; ++i) {
     memcached_return_t rc;
     auto r = rnd(0, kv.num);
+    timespec start_time;
+    timespec end_time;
+    clock_gettime(CLOCK_REALTIME, &start_time);
     free(memcached_get(&memc, kv.key.chr[r], kv.key.len[r], nullptr, nullptr, &rc));
+    clock_gettime(CLOCK_REALTIME, &end_time);
+
+    uint64_t start_time_int = start_time.tv_sec * 1000000 + start_time.tv_nsec / 1000;
+    uint64_t end_time_int = end_time.tv_sec * 1000000 + end_time.tv_nsec / 1000;
+    res_time.push_back(end_time_int - start_time_int);
+    get_time.push_back(end_time_int);
+
+    if (!memcached_success(rc)) {
+      std::cerr << memcached_strerror(&memc, rc) << "\n";
+    }
 
     if (check_return(opt, memc, kv.key.chr[r], rc)) {
       ++retrieved;
     }
   }
 
+  std::streambuf *buf;
+  std::ofstream out;
+  if (opt.isset("distribution")) {
+    std::string tid_s = std::to_string(gettid());
+    std::string format(opt.argof("distribution"));
+    std::string tmp = format + "_" + tid_s;
+    out.open(tmp.c_str(), std::ios_base::out);
+    buf = out.rdbuf();
+  } else {
+    buf = std::cout.rdbuf();
+  }
+  std::ostream output(buf);
+
+  output << "Distribution: " << retrieved << std::endl;
+  for (int i = 0; i < retrieved; i++)
+  {
+    output << "[" << i << ":" << get_time[i] << "] " << res_time[i]  << " usec" << std::endl;
+  }
   return retrieved;
 }
 
@@ -237,6 +271,11 @@ static std::ostream &align(std::ostream &io) {
 }
 
 int main(int argc, char *argv[]) {
+  struct timespec ts;
+  ts.tv_sec = 0;
+  ts.tv_nsec = 1000000;
+  nanosleep(&ts, NULL);
+
   client_options opt{PROGRAM_NAME, PROGRAM_VERSION, PROGRAM_DESCRIPTION};
   auto concurrency = DEFAULT_CONCURRENCY;
   auto load_count = DEFAULT_INITIAL_LOAD;
@@ -277,6 +316,7 @@ int main(int argc, char *argv[]) {
       .apply = wrap_stoul(load_count);
   opt.add("fixed-size", 'f', required_argument, "Fixed length of value  (default: random).")
       .apply = wrap_stoul(fixed_size);
+  opt.add("distribution", 'D', required_argument, "Save response time of get test. Only working with test=get option  (default: stdout).");
 
   char set[] = "set";
   opt.set("test", true, set);
