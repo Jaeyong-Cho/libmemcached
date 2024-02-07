@@ -147,8 +147,8 @@ static size_t execute_get(const client_options &opt, memcached_st &memc, const k
   }
   std::ostream output(buf);
 
-  output << "Distribution: " << retrieved << std::endl;
-  for (int i = 0; i < retrieved; i++)
+  output << "Distribution: " << kv.exec_num << std::endl;
+  for (int i = 0; i < kv.exec_num; i++)
   {
     output << "[" << i << ":" << get_time[i] << "] " << res_time[i]  << " usec" << std::endl;
   }
